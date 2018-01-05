@@ -1,0 +1,71 @@
+.footer {
+  background: #2A303C;
+  height: 144px;
+  z-index: 999;
+  min-width: 1200px;
+}
+.footerContain {
+  z-index: 99;
+  width: 1200px;
+  margin: 0 auto;
+  height: 100%;
+  padding: 30px 0;
+  color: #fff;
+  font-size: 14px;
+}
+.footerContain:after {
+  display: block;
+  content: '';
+  clear: both;
+}
+.footerContain .companyCall {
+  margin: 20px 30px 20px 20px;
+  border-right: 1px solid #fff;
+  padding-right: 30px;
+}
+.footerContain .companyCall img {
+  width: 59px;
+  height: 48px;
+  margin-right: 5px;
+}
+.footerContain .companyCall .tel {
+  font-size: 20px;
+  font-weight: 600;
+  margin-top: 5px;
+}
+.footerContain .companyItem {
+  margin: 20px 0;
+}
+.footerContain .companyItem a {
+  display: inline-block;
+}
+.footerContain .companyItem img {
+  width: 100%;
+  height: 100%;
+}
+.footerContain .companyItem .item:after {
+  display: block;
+  content: '';
+  clear: both;
+}
+.footerContain .companyItem .item {
+  margin-bottom: 6px;
+}
+.footerContain .companyItem .pull-left {
+  margin-right: 10px;
+}
+.footerContain .companyItem .icp {
+  font-size: 12px;
+  margin-left: 10px;
+}
+.footerContain .companyItem .huIcp {
+  color: #fff;
+}
+.footerContain .companyItem .mouleEntry li {
+  height: 30px;
+  line-height: 30px;
+}
+.footerContain .footerImg img {
+  width: 278px;
+  height: 84px;
+}

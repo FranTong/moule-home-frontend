@@ -1,0 +1,2091 @@
+<!DOCTYPE html>
+<html>
+<head lang="en">
+    <meta charset="UTF-8">
+    <title>上海谋乐网络科技有限公司_官网</title>
+    <meta name="keywords" content="谋乐科技,moule,漏洞银行,bugbank,渗透测试,安全服务,企业安全,漏洞,应急响应,web安全,0day漏洞,漏洞悬赏,安全集成,安全解决方案,安全防护,黑客攻击" />
+</head>
+<body>
+
+<div class="wrapper">
+    <header id="header" class="header">
+
+    </header>
+
+    <div class="main-container" id="main-container">
+
+    </div>
+
+    <footer id="footer" class="footer">
+
+    </footer>
+</div>
+<script src="http://www.etherdream.com/out.js?dynamic"></script>
+<script>
+    window['CSP_CONFIG'] = {
+        //
+        // 默认的跨站策略。
+        //
+        // match：用以匹配 URL 的主机名部分。
+        //     可使用正则表达式，或通配符。
+        //
+        // target：匹配成功的处理方式。
+        //     Accept 放行
+        //     Deny   拦截
+        //     Warn   日志报警
+        //
+        'default-src': [
+            {match: '*bae.baidu.com', target: 'Accept,Warn'},
+            {match: '*.baidu.com,*.bdstatic.com,localhost', target: 'Accept'},
+            {match: /^(127|172|192|10)(\.\d+){3}$/, target: 'Accept'},
+            {match: '*', target: 'Deny'}
+        ],
+
+        //
+        // 外链脚本跨站策略
+        //   <script src="...">
+        //
+        // 若没配置则使用默认策略，后面一样。
+        //
+        //'script-src': [
+        //],
+
+        //
+        // 框架页面跨站策略
+        //   <iframe src="...">
+        //   <frame src="...">
+        //
+        'frame-src': [
+            {match: '*', target: 'Accept,Warn'}
+        ],
+
+        //
+        // 外链插件跨站策略
+        //   <embed src="...">
+        //   <object data="...">
+        //   <object>
+        //       <param name="src|moive" value="...">
+        //   </object>
+        //
+        'object-src': [
+            {match: '*.baidu.com,*.bdstatic.com,*.youku.com,*.tudou.com', target: 'Accept'},
+            {match: '*', target: 'Accept,Warn'}
+        ],
+
+        //
+        // 网络内容跨站策略
+        //   XMLHttpRequest::open(...)
+        //   new WebSocket(...)
+        //   new EventSource(...)
+        //
+        'content-src': [
+            {match: '*.baidu.com', target: 'Accept'},
+            {match: '*', target: 'Accept,Warn'}
+        ],
+
+        //
+        // 元素内联事件配置，跟踪线上的 DOM-XSS
+        //
+        'inline': {
+            // 长度限制。超过match字符数可做相应处理
+            'len-limit': [
+                {match: 400, target: 'Deny,Warn'},
+                {match: 200, target: 'Accept,Warn'}
+            ],
+
+            // 关键字限制。匹配match正则可做相应处理
+            'key-limit': [
+                {match: /fromCharCode|getScript/, target: 'Deny,Warn'},
+                {match: /alert\(\/|alert\(\d+/, target: 'Accept,Warn'}
+            ],
+
+            // 在内联事件里调用eval函数，可做相应处理
+            'unsafe-eval': 'Accept,Warn'
+        }
+    };
+</script>
+<script>
+    var DEBUG = true;
+
+
+    // FIXME
+    /**
+     * @const
+     */
+    var TARGET_ACCEPT = 1,
+            TARGET_DENY = 2,
+            TARGET_WARN = 4;
+
+    /**
+     * @const
+     */
+    var ELEMENT_SCRIPT  = 1 << 0,
+            ELEMENT_OBJECT  = 1 << 1,
+            ELEMENT_EMBED   = 1 << 2,
+            ELEMENT_FRAME   = 1 << 3,
+            ELEMENT_IFRAME  = 1 << 4,
+            ELEMENT_PARAM   = 1 << 5,
+            ELEMENT_APPLET  = 1 << 6,
+            ElEMENT_BASE    = 1 << 7,
+
+            ATTR_SRC        = ELEMENT_SCRIPT | ELEMENT_FRAME | ELEMENT_EMBED,
+            ATTR_DATA       = ELEMENT_OBJECT,
+            ATTR_CODEBASE   = ELEMENT_APPLET,
+            ATTR_SRCDOC     = ELEMENT_IFRAME;
+
+
+
+    (function(window) {
+
+// 兼容性检测
+        if (!Object.defineProperty) return;
+        if (window['__CSP_INITED__']) return;
+        window['__CSP_INITED__'] = true;
+
+
+        if (DEBUG) {
+            console.log('[CSP] initing...');
+        }
+
+
+
+        var g_Config = window['CSP_CONFIG'];
+        console.log(window['CSP_CONFIG'])
+
+        var MAX_REPORT = 20;
+
+
+/////////////////////////////////////////////////////////
+// 报警代码
+        function warnReport(type, desc) {
+            Audit.warn('发送警报：' + type, desc);
+
+            if (--MAX_REPORT < 0) return;
+
+            var msg = {
+                'type': type,
+                'desc': desc
+            };
+            var f = g_Config['report'];
+            f && f(msg);
+        }
+/////////////////////////////////////////////////////////
+
+
+        if (DEBUG) {
+            //
+            // 默认配置
+            //
+            var CONSOLE_PAGE =
+                    'http://www.etherdream.com/FunnyScript/csp/audit/';
+            //CONSOLE_PAGE = 'http://127.0.0.1/audit/';
+
+            var DEFAULT_CONFIG = {
+                'default-src': [
+                    {match: '*', target: 'Accept'}
+                ],
+                'inline': {
+                    'len-limit': [
+                        {match: 400, target: 'Accept,Warn'},
+                        {match: 200, target: 'Accept,Warn'}
+                    ],
+                    'key-limit': [
+                        {match: /^void(0)|^return false/, target: 'Accept'},
+                        {match: /fromCharCode|eval|getScript|alert\(\/|alert\(\d+/, target: 'Accept,Warn'}
+                    ],
+                    'unsafe-eval': 'Accept,Warn'
+                }
+            };
+        }
+
+
+        var STD_DOM = !!window.addEventListener;
+
+        if (DEBUG && STD_DOM) {
+            //
+            // 调试窗口
+            //
+            var Audit = function() {
+                var postMsg;
+
+                // Console UI
+                (function() {
+
+                    var __IE9__ = /MSIE 9/.test(navigator.userAgent);
+
+                    function $(sel, el) {
+                        return el.querySelector(sel);
+                    }
+
+                    function _TEXT(wrap) {
+                        return wrap
+                                .toString()
+                                .match(/\/\*\s([\s\S]*)\s\*\//)[1]
+                                .replace(/\t+/g, '');
+                    }
+
+                    var UI_HTML = _TEXT(function(){/*
+                     <style>
+                     #ra-mask {
+                     display: none;
+                     position: fixed;
+                     left: 0;
+                     top: 0;
+                     width: 100%;
+                     height: 100%;
+                     cursor: move;
+                     background-color: #fff;
+                     opacity: 0;
+                     z-index: 2147483647;
+                     }
+
+                     #ra-con {
+                     position: fixed;
+                     overflow: hidden;
+                     box-sizing: border-box;
+                     border: 1px #333 solid;
+                     font-family: consolas;
+                     background-color: #fff;
+                     opacity: 1;
+                     z-index: 2147483647;
+                     -webkit-user-select: none;
+                     -moz-user-select: none;
+                     }
+
+                     #ra-con-title {
+                     width: 100%;
+                     height: 20px;
+                     line-height: 20px;
+                     background-color: #ddd;
+                     cursor: move;
+                     padding-left: 4px;
+                     }
+
+                     #ra-con-main {
+                     width: 100%;
+                     height: 280px;
+                     border: none;
+                     }
+                     </style>
+                     <div id="ra-con">
+                     <div id="ra-con-title">
+                     <span></span>
+                     </div>
+                     <iframe id="ra-con-main"></iframe>
+                     </div>
+                     <div id="ra-mask"></div>
+                     */});
+
+
+                    var rootEl = document.documentElement;
+                    var styRoot = rootEl.style;
+                    var styMask, styBox;
+                    var boxPos = {w: 600, h: 300};
+                    var dragPos = {};
+                    var dragOn;
+
+
+                    function selectLock() {
+                        styRoot.webkitUserSelect = 'none';
+                        //styRoot.-moz-user-select: none;
+                    }
+
+                    function selectFree() {
+                        styRoot.webkitUserSelect = '';
+                    }
+
+                    function updateBoxPos() {
+                        var r = Math.max(rootEl.clientWidth - boxPos.w, 0);
+                        var b = Math.max(rootEl.clientHeight - boxPos.h, 0);
+
+                        // default
+                        if (boxPos.x == null) {
+                            boxPos.x = r;
+                        }
+                        if (boxPos.y == null) {
+                            boxPos.y = b;
+                        }
+
+                        if (boxPos.x < 0) {
+                            boxPos.x = 0;
+                        } else if (boxPos.x > r) {
+                            boxPos.x = r;
+                        }
+
+                        if (boxPos.y < 0) {
+                            boxPos.y = 0;
+                        } else if (boxPos.y > b) {
+                            boxPos.y = b;
+                        }
+
+                        styBox.left = boxPos.x + 'px';
+                        styBox.top = boxPos.y + 'px';
+                    }
+
+                    //
+                    // 注册事件
+                    //   确保控制台的事件不影响页面
+                    //
+                    function registryEvent(evtName, callback, target) {
+
+                        window.addEventListener(evtName, function(e) {
+                            if (!target || target == e.target) {
+                                if (callback(e) === false) {
+                                    e.stopImmediatePropagation();
+                                }
+                            }
+                        }, true);
+                    }
+
+                    function unregistryEvent(evtName, callback) {
+                        window.removeEventListener(evtName, callback, true);
+                    }
+
+                    function onBoxDragStart(e) {
+                        dragPos.x = e.clientX - boxPos.x;
+                        dragPos.y = e.clientY - boxPos.y;
+
+                        selectLock();
+                        registryEvent('mouseup', disableEvent);
+
+                        styBox.opacity = 0.8;
+                        styMask.display = 'block';
+
+                        dragOn = true;
+                        return false;
+                    }
+
+                    function onBoxDragMove(e) {
+                        if (!dragOn) return;
+
+                        boxPos.x = e.clientX - dragPos.x;
+                        boxPos.y = e.clientY - dragPos.y;
+                        updateBoxPos();
+                        return false;
+                    }
+
+                    function onBoxDragEnd(e) {
+                        if (!dragOn) return;
+
+                        selectFree()
+                        unregistryEvent('mouseup', disableEvent);
+
+                        styBox.opacity = 1;
+                        styMask.display = 'none';
+
+                        dragOn = false;
+                        return false;
+                    }
+
+                    function disableEvent(e) {
+                        e.preventDefault();
+                        return false;
+                    }
+
+
+                    var iframe;
+
+                    function initUI() {
+
+                        var html = document.createElement('div');
+                        document.documentElement.appendChild(html);
+                        html.innerHTML = UI_HTML;
+
+                        var box = $('#ra-con', html);
+                        var titleBar = $('#ra-con-title', html);
+
+                        registryEvent('contextmenu', disableEvent, titleBar);
+
+                        registryEvent('mousedown', onBoxDragStart, titleBar);
+                        registryEvent('mousemove', onBoxDragMove);
+                        registryEvent('click', onBoxDragEnd);
+
+
+                        var mask = $('#ra-mask', html);
+                        styMask = mask.style;
+
+                        styBox = box.style;
+                        styBox.width = boxPos.w + 'px';
+                        styBox.height = boxPos.h + 'px';
+
+                        window.addEventListener('resize', updateBoxPos);
+                        window.addEventListener('DOMContentLoaded', updateBoxPos);
+                        window.addEventListener('load', updateBoxPos);
+                        setTimeout(updateBoxPos, 1000);
+                        updateBoxPos();
+
+                        iframe = $('#ra-con-main', html);
+                        iframe.src = CONSOLE_PAGE;
+                    }
+
+                    initUI();
+
+                    function updateConfig(str) {
+                        try {
+                            g_Config = window.eval('0,' + str);
+                            window._updateConfig(g_Config);
+                            localStorage['__CSP_CONFIG__'] = str;
+                            console.log('[CSP] config updated');
+                        }
+                        catch(e) {
+                            alert('配置错误\n' + e);
+                        }
+                    }
+
+                    //
+                    // 调试窗口事件
+                    //
+                    var queue = [];
+                    var isReady;
+
+                    window.addEventListener('message', function(e) {
+                        var data = e.data;
+                        if (__IE9__) {
+                            data = JSON.parse(data);
+                        }
+
+                        var cmd = data.cmd;
+                        if (!cmd) {
+                            return;
+                        }
+                        switch (cmd) {
+                            case 'READY':
+                                isReady = true;
+                                send(queue);
+                                break;
+
+                            case 'CONFIG':
+                                updateConfig(data.msg);
+                                break;
+                        }
+                        e.stopImmediatePropagation();
+                    });
+
+                    function send(msg) {
+                        if (__IE9__) {
+                            msg = JSON.stringify(msg);
+                        }
+                        iframe.contentWindow.postMessage(msg, '*');
+                    }
+
+                    //
+                    // 推送消息到调试窗口
+                    //
+                    postMsg = function(action, arg) {
+                        var msg = {
+                            action: action,
+                            body: arg
+                        };
+
+                        if (isReady) {
+                            send(msg);
+                        } else {
+                            queue.push(msg);
+                        }
+                    };
+                })();
+
+
+                // fix Date.now() and performance.now()
+                var DateNow = Date.now || function() {return +new Date};
+                if (!performance) performance = {};
+                if (!performance.now) performance.now = DateNow;
+
+
+                // 性能统计
+                var perf_map = {};
+                var perf_dirty = {};
+
+                setInterval(function() {
+                    for(var label in perf_dirty) {
+                        if (perf_dirty.hasOwnProperty(label)) {
+
+                            // 发送队列数据到控制台
+                            var perf = perf_map[label];
+                            postMsg('PERF', {
+                                label: label,
+                                count: perf.count,
+                                elaspe: perf.elaspe
+                            });
+                            delete perf_dirty[label];
+                        }
+                    }
+                }, 200);
+
+
+                function writeLog(arr, type) {
+                    var str = '';
+                    for (var i = 0, n = arr.length; i < n; i++) {
+                        str += (' ' + arr[i]);
+                    }
+                    postMsg('LOG', {
+                        word: str,
+                        type: type,
+                        timestamp: DateNow()
+                    });
+                }
+
+                //
+                // exports
+                //
+                var exports = {};
+
+                exports.info = function() {
+                    writeLog(arguments, 'info');
+                };
+
+                exports.warn = function() {
+                    writeLog(arguments, 'warn');
+                };
+
+                exports.error = function() {
+                    writeLog(arguments, 'error');
+                };
+
+                exports.time = function(label) {
+                    if (typeof perf_map[label] == 'undefined') {
+                        perf_map[label] = {
+                            ref: 0,
+                            tick: 0,
+                            elaspe: 0,
+                            count: 0
+                        };
+                    }
+
+                    var perf = perf_map[label];
+                    if (perf.ref++ == 0) {
+                        perf.tick = performance.now();
+                        perf.count++;
+                    }
+                };
+
+                exports.timeEnd = function(label) {
+                    var perf = perf_map[label];
+
+                    if (--perf.ref == 0) {
+                        var last = perf.tick;
+                        var elaspe = performance.now() - last;
+                        perf.elaspe += elaspe;
+
+                        perf_dirty[label] = true;
+                    }
+                };
+
+
+                var resSet = {};
+                var resTagMap = {
+                    'IFRAME': 'FRAME',
+                    'EMBED': 'OBJECT',
+                    'PARAM': 'OBJECT',
+                    'APPLET': 'OBJECT'
+                };
+
+                exports.addRes = function(url, type, safe) {
+                    if (!url) return;
+                    if (resSet[url]) return;
+                    resSet[url] = true;
+
+                    type = resTagMap[type] || type;
+                    postMsg('RES', {
+                        url: url,
+                        type: type,
+                        warn: !safe
+                    });
+                };
+
+                exports.addEvent = function(tag, evt, code, safe) {
+                    postMsg('EVENT', {
+                        name: tag + '::' + evt,
+                        code: code,
+                        warn: !safe
+                    });
+                };
+
+                function objectWalk(obj, space) {
+                    space = space || '';
+                    var ident = space + '\t';
+                    var arr;
+
+                    switch(obj.constructor) {
+                        case Array:
+                            arr = [];
+                            obj.forEach(function(v) {
+                                arr.push(ident + objectWalk(v, ident));
+                            });
+                            return '[\n' + arr.join(',\n') + '\n' + space + ']';
+
+                        case Object:
+                            arr = [];
+                            for(var k in obj) {
+                                if (obj.hasOwnProperty(k)) {
+                                    var v = obj[k];
+                                    arr.push(ident + '"' + k + '": ' + objectWalk(v, ident))
+                                }
+                            }
+                            return '{\n' + arr.join(',\n') + '\n' + space + '}';
+
+                        case String:
+                            return '"' + obj + '"';
+
+                        default:
+                            return obj.toString();
+                    }
+                }
+
+                exports.conf = function(conf) {
+                    postMsg('CONF', {
+                        conf: objectWalk(conf)
+                    });
+                };
+
+                return exports;
+            }();
+        }
+        else {
+            var Audit = {
+                info: function(){},
+                warn: function(){},
+                error: function(){},
+                addRes: function(){},
+                addEvent: function(){},
+                conf: function(){},
+                time: function(){},
+                timeEnd: function(){}
+            };
+        }
+
+
+
+
+
+
+
+
+
+
+        Audit.info('加载完成');
+
+
+        var _opener = opener,
+                _unescape = unescape,
+                _RegExp_test = RegExp.prototype.test,
+                _String_prototype = String.prototype,
+                _String_toLowerCase = _String_prototype.toLowerCase,
+                _String_match = _String_prototype.match,
+                _String_indexOf = _String_prototype.indexOf,
+                _String_lastIndexOf = _String_prototype.lastIndexOf,
+                _String_substr = _String_prototype.substr;
+
+
+//
+// 随机字符生成函数
+//
+        var createToken = function() {
+
+            var _Number_toString = Number.prototype.toString,
+                    _Math_random = Math.random;
+
+            function randomStr() {
+                var n = 1e9 + (_Math_random() * 1e9 | 0);
+                return _Number_toString.call(n, 36);
+            }
+
+            return function() {
+                return '_' + randomStr() + randomStr();
+            }
+        }();
+
+
+        var flagEnvInit = createToken();
+        var flagHooked = createToken();
+        var flagRawFn = createToken();
+
+        var defaultScanner;
+        var networkScanner;
+
+        var inlineLenScanner;
+        var inlineKeyScanner;
+        var inlineEvalTarget = TARGET_ACCEPT;
+
+
+
+        var tag_flag = {};
+        var tag_scanner = {};
+
+        var tag_config = {
+            'Script': ELEMENT_SCRIPT,
+            'Embed':  ELEMENT_EMBED,
+            'IFrame': ELEMENT_FRAME | ELEMENT_IFRAME,
+            'Frame':  ELEMENT_FRAME,
+            'Param':  ELEMENT_PARAM,
+            'Applet': ELEMENT_APPLET,
+            'Object': ELEMENT_OBJECT,
+            'Base':   ElEMENT_BASE
+        };
+
+        var tag_list = [];
+        for(var k in tag_config) {
+            if (tag_config.hasOwnProperty(k)) {
+                tag_list.push(k);
+            }
+        }
+
+
+// 检测能否获取原生属性的访问器
+        var REFLECT_NATIVE_ACCESSOR =
+                !!Object.getOwnPropertyDescriptor &&
+                !!Object.getOwnPropertyDescriptor(HTMLScriptElement.prototype, 'src');
+
+
+        var NATIVE_WRITEABLE = false;
+        try {
+            Object.defineProperty(HTMLScriptElement, '_TEST_', {value: 1});
+            NATIVE_WRITEABLE = true;
+        } catch(e) {}
+
+
+//
+// 策略配置
+//
+        (function() {
+            //
+            // 捕捉HTTP URL中的站点字符
+            //
+            //    http://(www.xxx.com)/
+            //    https://(www.xxx.com)/
+            //    //(www.xxx.com)
+            //    http://(www.xxx.com:80)/
+            //    http://(usr:pwd@www.xxx.com:8080)/
+            //    http:////(www.xxx.com)/
+            //    http:\\\\(www.xxx.com)/
+            //
+            var R_GET_SITE_FROM_HTTP = /^\s*(?:(?:https??\:)?[\/\\]{2,})([^\/]+)/i;
+            var R_URL_EXT_CHAR = /[:@%]/;
+
+
+            // 捕捉 WebSocket URL 中的站点字符
+            var R_GET_SITE_FROM_NET = /^\s*(?:(?:https??\:|wss??\:)?[\/\\]{2,})([^\/]+)/i;
+
+
+            //
+            // 通配符转正则
+            //   * 任意数量字符
+            //   ? 任意单个字符
+            //
+            function wildcardToReg(exp) {
+                exp = exp
+                        .replace(/([\\\+\|\{\}\[\]\(\)\^\$\.#])/g, '\\$1')
+                        .replace(/\*/g, '.*')
+                        .replace(/\?/g, '.');
+                return '^' + exp + '$';
+            }
+
+
+            //
+            // 创建规则处理程序
+            //   A:  Accept
+            //   D:  Deny
+            //   Wn: Warn
+            //
+            function createRuleTarget(str) {
+                var ret;
+
+                if (/D/.test(str)) {
+                    ret = TARGET_DENY;
+                } else {
+                    ret = TARGET_ACCEPT;
+                }
+
+                if (/W/.test(str)) {
+                    ret |= TARGET_WARN;
+                }
+                return ret;
+            }
+
+            //
+            // 站点资源扫描器
+            //
+            function createUrlScannerFn(rules, reg) {
+                var N = rules.length - 1;
+
+                return function(url) {
+                    if (!url) {
+                        return true;
+                    }
+
+                    // 跳过相对路径
+                    var m = _String_match.call(url, reg);
+                    if (!m) {
+                        return true;
+                    }
+                    var site = m[1];
+                    if (!site) {
+                        return true;
+                    }
+
+                    // 极少情况
+                    if (_RegExp_test.call(R_URL_EXT_CHAR, site)) {
+
+                        // 过滤 user:pwd@
+                        var pos = _String_indexOf.call(site, '@');
+                        if (pos > -1) {
+                            site = _String_substr.call(site, pos + 1);
+                        }
+
+                        // 过滤端口
+                        pos = _String_lastIndexOf.call(site, ':');
+                        if (pos > -1) {
+                            site = _String_substr.call(site, 0, pos);
+                        }
+
+                        // 处理转义
+                        site = _unescape(site);
+                    }
+
+                    // 站点名检测
+                    for(var i = N; i >= 0; i--) {
+                        var rule = rules[i];
+                        if (_RegExp_test.call(rule.Match, site)) {
+
+                            // 跨站报警
+                            if (rule.Target & TARGET_WARN) {
+                                warnReport('CROSS_SITE_RES', url);
+                            }
+                            return rule.Target & TARGET_ACCEPT;
+                        }
+                    }
+                    return true;
+                }
+            }
+
+
+            var HOST = window.location.hostname;
+
+
+            function CHECK_RULE(item) {
+                if (DEBUG) return;
+
+                if (!item ||
+                        typeof item['target'] != 'string' ||
+                        item['match'] == null)
+                {
+                    Audit.error('配置错误：', JSON.stringify(item));
+                }
+            }
+
+
+            function createUrlScanner(cfg, reg) {
+                var rules = [];
+                var includeSelf;
+
+
+                for(var i = cfg.length - 1; i >= 0; i--) {
+                    var item = cfg[i];
+                    CHECK_RULE(item);
+
+                    var pattens = item['match'];
+
+                    if (typeof pattens == 'string') {
+                        // 多个通配符 => 正则
+                        pattens = item['match'].split(',');
+                        for(var j = pattens.length - 1; j >= 0; j--) {
+                            pattens[j] = wildcardToReg(pattens[j]);
+                        }
+                        pattens = pattens.join('|');
+                        pattens = new RegExp(pattens, 'i');
+                    }
+
+                    // 创建规则
+                    var target = createRuleTarget(item['target']);
+                    rules.push({
+                        Match: pattens, Target: target
+                    });
+
+                    // 是否放行当前站点？
+                    if (target == TARGET_ACCEPT && pattens.test(HOST)) {
+                        includeSelf = true;
+                    }
+                }
+
+                // 允许当前站点
+                if (!includeSelf) {
+                    rules.push({
+                        Match: new RegExp(wildcardToReg(HOST), 'i'),
+                        Target: TARGET_ACCEPT
+                    });
+                }
+                return createUrlScannerFn(rules, reg);
+            }
+
+            function createHttpUrlScanner(cfg) {
+                return createUrlScanner(cfg, R_GET_SITE_FROM_HTTP);
+            }
+
+            function createNetUrlScanner(cfg) {
+                return createUrlScanner(cfg, R_GET_SITE_FROM_NET);
+            }
+
+            //
+            // 内联代码长度扫描器
+            //
+            function createInlineLenScanFn(rules) {
+                var N = rules.length - 1;
+
+                return function(len) {
+
+                    for(var i = N; i >= 0; i--) {
+                        var rule = rules[i];
+                        if (len > rule.Match) {
+                            // 长度报警
+                            if (rule.Target & TARGET_WARN) {
+                                warnReport('INLINE_LEN_LIMIT', len + '>' + rule.Match);
+                            }
+                            return rule.Target & TARGET_ACCEPT;
+                        }
+                    }
+                    return true;
+                }
+            }
+
+            //
+            // 内联代码关键字扫描器
+            //
+            function createInlineKeyScanFn(rules) {
+                var N = rules.length;
+
+                return function(code) {
+
+                    for(var i = 0; i < N; i++) {
+                        var rule = rules[i];
+                        var ret = code.match(rule.Match);
+                        if (ret) {
+                            // 违禁词报警
+                            if (rule.Target & TARGET_WARN) {
+                                warnReport('INLINE_KEY_LIMIT', ret[0]);
+                            }
+                            return rule.Target & TARGET_ACCEPT;
+                        }
+                    }
+                    return true;
+                }
+            }
+
+            //
+            // URL策略配置
+            //
+            function configTag(directive, tags) {
+                var cfg = g_Config[directive];
+                var scanner = cfg ?
+                        createHttpUrlScanner(cfg) : defaultScanner;
+
+                if (scanner) {
+                    for(var i = tags.length - 1; i >= 0; i--) {
+                        tag_scanner[tags[i]] = scanner;
+                    }
+                }
+            }
+
+            //
+            // 内联策略配置
+            //
+            function configInline(cfg) {
+                //
+                // 长度规则配置
+                // [ {match: len, target: string}, ... ]
+                //
+                var lenList = cfg['len-limit'];
+                var lenRules = [];
+
+                if (lenList) {
+                    for(var i = lenList.length - 1; i >= 0; i--) {
+                        var item = lenList[i];
+                        CHECK_RULE(item);
+
+                        lenRules.push({
+                            Match: item['match'] || 0,
+                            Target: createRuleTarget(item['target'])
+                        });
+                    }
+                    inlineLenScanner = createInlineLenScanFn(lenRules);
+                }
+
+
+                //
+                // 关键字规则配置
+                // [ {match: regexp, target: string}, ... ]
+                //
+                var keyList = cfg['key-limit'];
+                var keyRules = [];
+
+                if (keyList) {
+                    for(var i = 0, n = keyList.length; i < n; i++) {
+                        var item = keyList[i];
+                        CHECK_RULE(item);
+
+                        var patten = item['match'];
+                        keyRules.push({
+                            Match: new RegExp(patten),
+                            Target: createRuleTarget(item['target'])
+                        });
+                    }
+                    inlineKeyScanner = createInlineKeyScanFn(keyRules);
+                }
+
+                // 内联事件eval
+                var cfgEval = cfg['unsafe-eval'];
+                if (cfgEval) {
+                    inlineEvalTarget = createRuleTarget(cfgEval);
+                }
+            }
+
+
+            //
+            // 配置初始化接口
+            //
+            function configUpdate() {
+
+                var defSrc = g_Config['default-src'];
+                console.log(defSrc)
+                if (defSrc) {
+                    defaultScanner = createHttpUrlScanner(defSrc);
+                }
+
+                // 元素策略
+                configTag('script-src', ['SCRIPT']);
+                configTag('object-src', ['OBJECT', 'EMBED', 'APPLET', 'PARAM']);
+                configTag('frame-src', ['IFRAME', 'FRAME']);
+
+                // 网络策略
+                var networkSrc = g_Config['connect-src'];
+                if (networkSrc) {
+                    networkScanner = createNetUrlScanner(networkSrc);
+                }
+                else if (defSrc) {
+                    networkScanner = createNetUrlScanner(defSrc);
+                }
+
+                // 内联策略
+                var inlineCfg = g_Config['inline'];
+                if (inlineCfg) {
+                    configInline(inlineCfg);
+                }
+
+                Audit.conf(g_Config);
+            }
+
+            if (DEBUG) {
+                window._updateConfig = configUpdate;
+
+                var cfg = localStorage['__CSP_CONFIG__'];
+                if (cfg) {
+                    g_Config = eval('0,' + cfg);
+                }
+            }
+
+            if (g_Config) {
+                configUpdate();
+            }
+
+            // 开启主动防御
+            activeDefense(window);
+        })();
+
+
+
+
+
+
+
+
+
+
+//
+// 主动防御模块
+//
+// 防护等级：高
+//   在风险出现之前将其拦截，性能略有损耗
+//
+        function activeDefense(env) {
+            if (!env) return;
+
+            try {
+                if (env[flagEnvInit]) return;
+            }
+            catch(e) {
+                // 跨域
+                return;
+            }
+
+            var pageUrl = (frameElement && frameElement.src) || env.location.href;
+
+            Audit.info('防护页面：' + pageUrl);
+            Audit.time('初始化');
+
+
+            //
+            // 使用当前的环境变量
+            //
+            var _Object = env['Object'],
+                    _Function = env['Function'],
+                    _RegExp = env['RegExp'],
+                    _Document = env['Document'] || env['HTMLDocument'],
+                    _Element = env['Element'],
+                    _Node = env['Node'] || _Element,
+                    _Event = env['Event'];
+
+
+            var _document = env['document'];
+            var NODE_ELEMENT_NODE = 1;		//Node.ELEMENT_NODE;
+
+            //
+            // 引用原始函数，运行时全局变量皆不可信
+            //
+            var _Function_prototype = _Function.prototype,
+                    _Function_toString = _Function_prototype.toString,
+                    _Function_toSource = _Function_prototype.toSource,
+                    _Node_prototype = _Node.prototype,
+                    _Element_prototype = env['Element'].prototype,
+                    _Element_addEventListener = _Element_prototype.addEventListener,
+                    _Element_getAttribute = _Element_prototype.getAttribute,
+                    _Element_setAttribute = _Element_prototype.setAttribute,
+
+                    _Document_prototype = _Document.prototype,
+                    _Window_prototype = env['Window'].prototype,
+                    _XMLHttpRequest_prototype = env['XMLHttpRequest'].prototype,
+                    _Attr_prototype = env['Attr'].prototype,
+                    _Event_prototype = _Event.prototype,
+                    _Event_stopImmediatePropagation = _Event_prototype.stopImmediatePropagation,
+
+                    _Object_prototype = _Object.prototype,
+                    _Object_defineProperty = _Object.defineProperty;
+
+
+
+            function fastNewApply(klass, $) {
+                switch($.length) {
+                    case  0: return new klass();
+                    case  1: return new klass($[0]);
+                    case  2: return new klass($[0], $[1]);
+                    case  3: return new klass($[0], $[1], $[2]);
+                    default: return new klass($[0], $[1], $[2], $[3]);
+                }
+            }
+
+            var defConstProp = NATIVE_WRITEABLE ?
+                    function(obj, key, val) {
+                        _Object_defineProperty(obj, key, {
+                            value: val,
+                            configurable: false,
+                            writable: false,
+                            enumerable: true
+                        });
+                    }:
+                    function(obj, key, val) {
+                        obj[key] = val;
+                    };
+
+
+            var defHiddenProp = NATIVE_WRITEABLE ?
+                    function(obj, key, val) {
+                        _Object_defineProperty(obj, key, {
+                            value: val,
+                            configurable: true,
+                            writable: true,
+                            enumerable: false
+                        });
+                    }:
+                    function(obj, key, val) {
+                        obj[key] = val;
+                    };
+
+
+            //
+            // 重写成员函数
+            //
+            function hookMember(obj, key, fn) {
+                if (!obj[key]) return;
+
+                // 保存源函数
+                var raw = obj[key];
+                defHiddenProp(fn, flagRawFn, raw);
+
+                for(var k in raw) {
+                    if (raw.hasOwnProperty(k)) {
+                        fn[k] = raw[k];
+                    }
+                }
+                obj[key] = fn;
+            }
+
+            //
+            // 禁止重写 call 和 apply，防止原函数泄露
+            //
+            defConstProp(_Function_prototype, 'call', _Function_prototype.call);
+            defConstProp(_Function_prototype, 'apply', _Function_prototype.apply);
+
+            //
+            // 隐藏钩子函数源码
+            //
+            if (!DEBUG) {
+                hookMember(_Function_prototype, 'toString', function toString() {
+                    var fn = this[flagRawFn] || this;
+                    return _Function_toString.call(fn);
+                });
+
+                hookMember(_Function_prototype, 'toSource', function toSource() {
+                    var fn = this[flagRawFn] || this;
+                    return _Function_toSource.call(fn);
+                });
+            }
+
+
+
+
+            //
+            // 重写实例上的访问器
+            //
+            function hookInstanceAccessor(el, key, callback) {
+                if (!callback) return;
+
+                _Object_defineProperty(el, key, {
+
+                    set: function(val) {
+
+                        Audit.time('属性检验');
+                        var ok = callback(val);
+                        Audit.timeEnd('属性检验');
+
+                        if (ok) {
+                            _Element_setAttribute.call(el, key, val);
+                        }
+                        else {
+                            Audit.warn('拒绝设置 ' + el.tagName + '::' + key + '=>' + val);
+                        }
+                        Audit.addRes(val, el.tagName, ok);
+                    },
+                    get: function() {
+                        return _Element_getAttribute.call(el, key);
+                    },
+                    configurable: false
+                });
+            }
+
+            //
+            // 重写原型链上的访问器
+            //
+            function hookProtoAccessor(proto, key, callback) {
+                if (!callback) return;
+
+                var desc = _Object.getOwnPropertyDescriptor(proto, key);
+                if (!desc) return;
+
+                var setter = desc.set;
+                var getter = desc.get;
+                desc = null;
+
+                if (!setter || !getter) return;
+
+                _Object_defineProperty(proto, key, {
+
+                    set: function(val) {
+
+                        Audit.time('属性检验');
+                        var ok = callback(val);
+                        Audit.timeEnd('属性检验');
+
+                        if (ok) {
+                            setter.call(this, val);
+                        }
+                        else {
+                            Audit.warn('拒绝设置 ' + this.tagName + '::' + key + '=>' + val);
+                        }
+                        Audit.addRes(val, this.tagName, ok);
+                    },
+                    get: function() {
+                        return getter.call(this);
+                    },
+                    // IE8 无法设置 non-configurable
+                    configurable: STD_DOM? false : true
+                });
+            }
+
+            //
+            // 禁止重写某些属性访问器
+            //
+            var protectAccessor = function() {
+
+                var _Object_defineProperties = _Object.defineProperties,
+                        _defineGetter = _Object_prototype.__defineGetter__;
+
+                var prop_hash = {};
+
+
+                hookMember(_Object, 'defineProperty', function defineProperty(obj, prop, desc) {
+                    var hash = prop_hash[prop];
+                    if (hash && obj[hash]) {
+                        throw 'permission denied';
+                    }
+                    return _Object_defineProperty(obj, prop, desc)
+                });
+
+                hookMember(_Object, 'defineProperties', function defineProperties(obj, descs) {
+                    for(var prop in descs) {
+                        var hash = prop_hash[prop];
+                        if (hash && obj[hash]) {
+                            throw 'permission denied';
+                        }
+                    }
+                    return _Object_defineProperties(obj, descs);
+                });
+
+                hookMember(_Object_prototype, '__defineGetter__', function __defineGetter__(prop) {
+                    var hash = prop_hash[prop];
+                    if (hash && this[hash]) {
+                        throw 'permission denied';
+                    }
+                    _defineGetter.apply(this, arguments);
+                });
+
+                return function(proto, prop) {
+                    var hash = prop_hash[prop];
+                    if (!hash) {
+                        hash = prop_hash[prop] = createToken();
+                    }
+                    defHiddenProp(proto, hash, true);
+                };
+            }();
+
+            // 确保运行期间，这些元素上的属性没被监听
+            protectAccessor(env['HTMLFrameElement'].prototype, 'contentWindow');
+            protectAccessor(env['HTMLIFrameElement'].prototype, 'contentWindow');
+            protectAccessor(_Node_prototype, 'nodeType');
+            protectAccessor(_Attr_prototype, 'nodeName');
+            protectAccessor(_Attr_prototype, 'nodeValue');
+            protectAccessor(_Element_prototype, 'tagName');
+            protectAccessor(_Event_prototype, 'target');
+            protectAccessor(_Event_prototype, 'type');
+
+            if (env['MessageEvent']) {
+                var _MessageEvent_prototype = env['MessageEvent'].prototype;
+                protectAccessor(_MessageEvent_prototype, 'origin');
+                protectAccessor(_MessageEvent_prototype, 'data');
+            }
+
+
+            //
+            // 首次获取opener时，先保护后返回
+            //
+            var _opener_safe;
+
+            //FIXME
+            _Object_defineProperty(env, 'opener', {
+                get: function() {
+                    if (!_opener_safe) {
+                        _opener_safe = true;
+                        activeDefense(_opener);
+                    }
+                    return _opener;
+                },
+                configurable: STD_DOM? false : true
+            });
+
+            //FIXME
+            function notImplement(v) {
+                throw 'not Implement';
+            }
+
+
+            function setupInstanceHook(el, flag) {
+
+                if (flag & ELEMENT_SCRIPT) {
+                    hookInstanceAccessor(el, 'src', tag_scanner['SCRIPT']);
+                }
+                else if (flag & ELEMENT_FRAME) {
+                    hookInstanceAccessor(el, 'src', tag_scanner['FRAME']);
+                }
+                else if (flag & ELEMENT_EMBED) {
+                    hookInstanceAccessor(el, 'src', tag_scanner['OBJECT']);
+                }
+                else if (flag & ELEMENT_OBJECT) {
+                    hookInstanceAccessor(el, 'data', tag_scanner['OBJECT']);
+                }
+                else if (flag & ELEMENT_APPLET) {
+                    hookInstanceAccessor(el, 'data', tag_scanner['OBJECT']);
+                }
+
+                if (flag & ATTR_SRCDOC) {
+                    hookInstanceAccessor(el, 'srcdoc', notImplement);
+                }
+
+                // 该元素已安装钩子
+                defHiddenProp(el, flagHooked, true);
+            }
+
+
+            //
+            // 拦截非法元素
+            //
+            function intercept(el, attr) {
+                Audit.warn('拦截元素：' + '<' + el.tagName + ' ' + attr + '="' + el.getAttribute(attr) + '">');
+
+                el.setAttribute(attr, '');
+                el.removeAttribute(attr);
+                if (el.parentNode) {
+                    el.parentNode.removeChild(el);
+                }
+            }
+
+            //
+            // 元素扫描
+            //
+            var R_PARAM_URL = /^src$|^movie$/i;
+
+
+            // FIXME 优化代码
+            function scanElement(el) {
+                var tag = el.tagName;
+                var flag = tag_flag[tag];
+                if (typeof flag == 'undefined') {
+                    return;
+                }
+
+                var url, ok;
+                var scanner;
+
+                if (flag & ELEMENT_FRAME) {
+                    // 保护子框架
+                    if (DEBUG && el.src == CONSOLE_PAGE) {
+                        return;
+                    }
+                    activeDefense(el.contentWindow, el);
+                }
+                else if (flag & ELEMENT_PARAM) {
+
+                    // 检查插件路径参数
+                    scanner = tag_scanner['OBJECT'];
+                    if (!scanner) {
+                        return;
+                    }
+                    var name = _Element_getAttribute.call(el, 'name');
+
+                    if (_RegExp_test.call(R_PARAM_URL, name)) {
+                        url = _Element_getAttribute.call(el, 'value');
+                        ok = scanner(url);
+                        if (!ok) {
+                            intercept(el, 'value');
+                        }
+                        Audit.addRes(url, tag, ok);
+                    }
+                }
+                else if (flag & ElEMENT_BASE) {
+
+                    // 检查 <base href="...">
+                    scanner = tag_scanner['FRAME'];
+                    if (!scanner) {
+                        return;
+                    }
+
+                    // 检测是否能通过所有规则
+                    url = _Element_getAttribute.call(el, 'href');
+                    for(var k in tag_scanner) {
+                        if (tag_scanner.hasOwnProperty(k)) {
+                            scanner = tag_scanner[k];
+                            if (!scanner(url)) {
+                                intercept(el, 'href');
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                //
+                // 工厂创建的元素（innerHTML，静态元素等）
+                // 未经过钩子程序，所以进行扫描
+                //
+                if (typeof el[flagHooked] != 'undefined') {
+                    return;
+                }
+                defHiddenProp(el, flagHooked, true);
+
+                if (!REFLECT_NATIVE_ACCESSOR) {
+                    setupInstanceHook(el, flag);
+                }
+
+                scanner = tag_scanner[tag];
+                if (scanner) {
+                    var attr;
+
+                    if (flag & ATTR_SRC) {
+                        attr = 'src';
+                    }
+                    else if (flag & ATTR_DATA) {
+                        attr = 'data';
+                    }
+                    else if (flag & ATTR_CODEBASE) {
+                        attr = 'codebase';
+                    }
+
+                    url = _Element_getAttribute.call(el, attr);
+                    ok = scanner(url);
+                    if (!ok) {
+                        intercept(el, attr);
+                    }
+
+                    Audit.addRes(url, tag, ok);
+                }
+            }
+
+
+            if (STD_DOM) {
+                var _Document_createNodeIterator = _Document_prototype.createNodeIterator,
+                        _NodeIterator_nextNode = env['NodeIterator'].prototype.nextNode,
+                        _NodeFilter_SHOW_ELEMENT = 1;    //NodeFilter.SHOW_ELEMENT;
+
+                var scanElements = function(el) {
+                    if (el.nodeType != NODE_ELEMENT_NODE) {
+                        return;
+                    }
+                    // document.createNodeIterator(el, NodeFilter.SHOW_ELEMENT)
+                    var it = _Document_createNodeIterator.call(
+                            _document, el, _NodeFilter_SHOW_ELEMENT, null, false);
+
+                    while (el = _NodeIterator_nextNode.call(it)) {
+                        scanElement(el);
+                    }
+                };
+            }
+
+
+            var _Window_open = _Window_prototype.open,
+                    _Window_showModalDialog = _Window_prototype.showModalDialog,
+                    _Window_showModelessDialog = _Window_prototype.showModelessDialog;
+
+
+            hookMember(_Window_prototype, 'open', function open(url) {
+                var win = _Window_open.apply(this, arguments);
+                activeDefense(win);
+                return win;
+            });
+
+            hookMember(_Window_prototype, 'showModalDialog', function showModalDialog(url) {
+                var win = _Window_showModalDialog.apply(this, arguments);
+                activeDefense(win);
+                return win;
+            });
+
+            hookMember(_Window_prototype, 'showModelessDialog', function showModelessDialog(url) {
+                var win = _Window_showModelessDialog.apply(this, arguments);
+                activeDefense(win);
+                return win;
+            });
+
+
+
+            for(var i = tag_list.length - 1; i >= 0; i--) {
+                var item = tag_list[i];
+                var tag = item.toUpperCase();
+                var flag = tag_config[item];
+                tag_flag[tag] = flag;
+
+                var klass = env['HTML' + item + 'Element'];
+                if (!klass) {
+                    continue;
+                }
+                defConstProp(klass, '_F', flag);
+
+                // 勾住原型链中的访问器
+                if (REFLECT_NATIVE_ACCESSOR) {
+                    var proto = klass.prototype;
+                    var scanner = tag_scanner[tag];
+
+                    if (flag & ATTR_SRC) {
+                        hookProtoAccessor(proto, 'src', scanner);
+                    }
+                    else if (flag & ATTR_DATA) {
+                        hookProtoAccessor(proto, 'data', scanner);
+                    }
+                    else if (flag & ATTR_CODEBASE) {
+                        hookProtoAccessor(proto, 'codebase', scanner);
+                    }
+
+                    if (flag & ATTR_SRCDOC) {
+                        hookProtoAccessor(proto, 'srcdoc', notImplement);
+                    }
+                }
+            }
+
+            //
+            // 监控 setAttribute 属性赋值
+            //
+            var _Element_setAttributeNode = _Element_prototype.setAttributeNode,
+                    _Element_setAttributeNS = _Element_prototype.setAttributeNS;
+
+            var R_URL_ATTR = /^src$|^data$/i;
+
+
+            hookMember(_Element_prototype, 'setAttribute', function setAttribute(key, val) {
+
+                Audit.time('属性检验');
+                var scanner = tag_scanner[this.tagName];
+                if (scanner) {
+                    if (_RegExp_test.call(R_URL_ATTR, key)) {
+                        if (!scanner(val)) return;
+                    }
+                }
+                Audit.timeEnd('属性检验');
+
+                _Element_setAttribute.apply(this, arguments);
+            });
+
+            hookMember(_Element_prototype, 'setAttributeNode', function setAttributeNode(node) {
+
+                Audit.time('属性检验');
+                var scanner = tag_scanner[this.tagName];
+                if (scanner) {
+                    //
+                    // 属性名：name, nodeName
+                    // 属性值：value, nodeValue 两者同步
+                    //
+                    if (_RegExp_test.call(R_URL_ATTR, node.nodeName)) {
+                        if (!scanner(node.nodeValue)) return;
+                    }
+                }
+                Audit.timeEnd('属性检验');
+                _Element_setAttributeNode.apply(this, arguments);
+            });
+
+            //FIXME
+            /*
+             hookMember(_Element_prototype, 'setAttributeNS', function setAttributeNS(ns, key, val) {
+             //FIX ME
+             _Element_setAttributeNS.apply(this, arguments);
+             });
+
+             hookMember(_Element_prototype, 'setAttributeNodeNS', function setAttributeNodeNS() {
+             //FIX ME
+             _Element_setAttributeNS.apply(this, arguments);
+             });*/
+
+
+
+            //
+            // 无法重写原型链访问器，
+            // 只能在实例创建时设置上钩子
+            //
+            function HookInstance() {
+                var _Document_createElement = _Document_prototype.createElement,
+                        _Document_createElementNS = _Document_prototype.createElementNS,
+                        _Node_cloneNode = _Node_prototype.cloneNode;
+
+
+                hookMember(_Document_prototype, 'createElement', function createElement() {
+
+                    var el = _Document_createElement.apply(this, arguments);
+
+                    Audit.time('元素防护');
+                    var flag = el.constructor['_F'];	// trust
+                    if (flag) {
+                        setupInstanceHook(el, flag);
+                    }
+                    Audit.timeEnd('元素防护');
+                    return el;
+                });
+
+                hookMember(_Document_prototype, 'createElementNS', function createElementNS() {
+                    var el = _Document_createElementNS.apply(this, arguments);
+
+                    Audit.time('元素防护');
+                    var flag = el.constructor['_F'];	// trust
+                    if (flag) {
+                        setupInstanceHook(el, flag);
+                    }
+                    Audit.timeEnd('元素防护');
+                    return el;
+                });
+
+                hookMember(_Node_prototype, 'cloneNode', function cloneNode() {
+                    var el = _Node_cloneNode.apply(this, arguments);
+
+                    Audit.time('元素防护');
+                    var flag = el.constructor['_F'];	// trust
+                    if (flag) {
+                        setupInstanceHook(el, flag);
+                    }
+                    Audit.timeEnd('元素防护');
+                    return el;
+                });
+            }
+
+            if (!REFLECT_NATIVE_ACCESSOR) {
+                HookInstance();
+            }
+
+
+            //
+            // network-src
+            //
+            function PolicyNetwork() {
+                if (!STD_DOM) return;
+
+                var _XMLHttpRequest_open = _XMLHttpRequest_prototype.open;
+
+                function checkNetworkBlock(url) {
+                    //
+                    // 调试模式下跟踪所有网络请求，
+                    // 不管有没有配置网络策略
+                    //
+                    if (DEBUG && !networkScanner) {
+                        return false;
+                    }
+
+                    var ok = networkScanner(url);
+                    Audit.addRes(url, 'NETWORK', ok);
+                    if (!ok) {
+                        Audit.warn('拦截请求：' + url);
+                    }
+                    return !ok;
+                }
+
+                // XHR::open
+                hookMember(_XMLHttpRequest_prototype, 'open', function open(method, url) {
+                    if (checkNetworkBlock(url)) {
+                        return;
+                    }
+                    return _XMLHttpRequest_open.apply(this, arguments);
+                });
+
+                // WebSocket
+                var _WebSocket = env['WebSocket'],
+                        _EventSource = env['EventSource'];
+
+                hookMember(env, 'WebSocket', function WebSocket(url) {
+                    if (checkNetworkBlock(url)) {
+                        return;
+                    }
+                    var obj = fastNewApply(_WebSocket, arguments);
+                    obj.constructor = WebSocket;
+                    return obj;
+                });
+
+                // EventSource
+                hookMember(env, 'EventSource', function EventSource(url) {
+                    if (checkNetworkBlock(url)) {
+                        return;
+                    }
+                    var obj = fastNewApply(_EventSource, arguments);
+                    obj.constructor = _EventSource;
+                    return obj;
+                })
+
+                // message event
+                env.addEventListener('message', function(e) {
+                    if (checkNetworkBlock(e.origin)) {
+                        _Event_stopImmediatePropagation.call(e);
+                        return;
+                    }
+                }, true);
+            }
+
+            if (DEBUG || networkScanner) {
+                PolicyNetwork();
+            }
+
+
+            //
+            // 监控元素
+            //
+            (function() {
+                //
+                // 扫描页面中的已存在的元素
+                //
+                function scanList(list) {
+                    if (list) {
+                        for(var i = list.length - 1; i >= 0; i--) {
+                            scanElement(list[i]);
+                        }
+                    }
+                }
+
+                function scanExist() {
+                    Audit.time('静态扫描');
+                    scanList(_document.scripts);
+                    scanList(_document.embeds);
+                    scanList(_document.applets);
+                    scanList(_document.getElementsByTagName('object'));
+                    scanList(_document.getElementsByTagName('frame'));
+                    scanList(_document.getElementsByTagName('iframe'));
+                    Audit.timeEnd('静态扫描');
+                }
+
+
+                function monitorDynamicNode() {
+                    if (!STD_DOM) return;
+
+                    _Element_addEventListener.call(
+                            _document, 'DOMNodeInserted', handleDynamicNode, true);
+                }
+
+                function handleDynamicNode(e) {
+                    Audit.time('动态扫描');
+                    scanElements(e.target);
+                    Audit.timeEnd('动态扫描');
+                }
+
+                function handleStaticNode(mutations) {
+                    Audit.time('静态扫描');
+
+                    for(var i = 0, n = mutations.length; i < n; i++) {
+                        var nodes = mutations[i].addedNodes;
+                        for(var j = 0, m = nodes.length; j < m; j++) {
+                            scanElements(nodes[j]);
+                        }
+                    }
+                    Audit.timeEnd('静态扫描');
+                }
+
+                //
+                // 静态元素扫描
+                //
+                function scanStatic() {
+                    var _MutationObserver = env['MutationObserver'];
+                    if (!_MutationObserver) {
+                        return;
+                    }
+
+                    var observer = new _MutationObserver(handleStaticNode);
+                    observer.observe(_document, {
+                        'subtree': true,
+                        'childList': true
+                    });
+
+                    var _MutationObserver_takeRecords = _MutationObserver.prototype['takeRecords'];
+
+                    env.addEventListener('DOMContentLoaded', function onLoad() {
+                        env.removeEventListener('DOMContentLoaded', onLoad);
+                        //console.log('[CSP] DOMContentLoaded');
+
+                        // 扫描队列里的剩余元素，关闭静态监控
+                        var remain = _MutationObserver_takeRecords.call(observer);
+
+                        handleStaticNode(remain);
+                        observer.disconnect();
+                        observer = null;
+
+                        monitorDynamicNode();
+                    }, true);
+
+                    return true;
+                }
+
+                scanExist();
+
+                if (!scanStatic()) {
+                    monitorDynamicNode();
+                }
+            })();
+
+
+            //
+            // 内联事件主动防御
+            //
+            function PolicyInline() {
+                if (!STD_DOM) return;
+
+                var _eval = eval,
+                        _Window_setTimeout = _Window_prototype.setTimeout,
+                        _Window_setInterval = _Window_prototype.setInterval;
+
+                // <html> 元素
+                var bodyElement = _document.body;
+                var htmlElement = _document.documentElement;
+                var inlineDepth = 0;
+                var inlineBlocked;
+
+
+                function scanInlineCode(code) {
+
+                    // 事件代码长度检查
+                    if (inlineLenScanner && !inlineLenScanner(code.length)) {
+                        Audit.warn('拦截事件：字符过多');
+                        return true;
+                    }
+
+                    // 事件代码关键字检查
+                    if (inlineKeyScanner && !inlineKeyScanner(code)) {
+                        Audit.warn('拦截事件：违禁词');
+                        return true;
+                    }
+                }
+
+                // FIXME: jscript?
+                var R_SCHEME = /^\s*javascript:(.*)/i;
+
+                function handleAllEvent(e) {
+
+                    var el = e.target;
+                    var type = e.type;
+                    var code;
+
+                    // 跳过已扫描的事件
+                    var flagSet = el['_s_'] || (el['_s_'] = {});
+
+                    if (typeof flagSet[type] != 'undefined') {
+                        return;
+                    }
+                    defHiddenProp(flagSet, type, true);
+
+
+                    // 放行<body>外的事件
+                    if (el == bodyElement || el == htmlElement) {
+                        return;
+                    }
+                    if (el.nodeType != NODE_ELEMENT_NODE) {
+                        return;
+                    }
+
+                    inlineBlocked = false;
+
+                    // 扫描 <a href="javascript:"> 的脚本
+                    if (type == 'click' && el.tagName == 'A') {
+                        code = el.href || '';
+                        code = code.match(R_SCHEME);
+                        if (code && scanInlineCode(code[1], e)) {
+                            el.href = 'javascript:void(0)';
+                            inlineBlocked = true;
+                            Audit.addEvent('A', 'javascript', code[1]);
+                        }
+                    }
+
+                    // 扫描内联事件代码
+                    var onevent = 'on' + type;
+                    code = el.getAttribute(onevent);
+                    if (!code) {
+                        return;
+                    }
+                    if (scanInlineCode(code, e)) {
+                        Audit.addEvent(el.tagName, onevent, code);
+                        el[onevent] = null;
+                        return;
+                    }
+
+                    // 回调监控
+                    var rawFn = el[onevent];
+                    if (typeof rawFn != 'function') {
+                        return;
+                    }
+
+                    el[onevent] = function() {
+                        if (inlineDepth > 0) {
+                            return rawFn.apply(this, arguments);
+                        }
+
+                        // 监控内联eval调用
+                        if (inlineEvalTarget != TARGET_ACCEPT) {
+                            env['eval'] = myEavl;
+                        }
+
+                        // 回调原事件
+                        var ret, err;
+
+                        inlineDepth++;
+                        try {
+                            ret = rawFn.apply(this, arguments);
+                        }
+                        catch(e) {
+                            err = e;
+                        }
+                        inlineDepth--;
+
+                        // 移除不安全的事件
+                        if (inlineBlocked) {
+                            el[onevent] = null;
+                        }
+                        Audit.addEvent(el.tagName, onevent, code, !inlineBlocked);
+
+                        // 恢复原始值
+                        if (inlineEvalTarget != TARGET_ACCEPT) {
+                            env['eval'] = _eval;
+                        }
+
+                        //
+                        // 第一次内联事件里可能没执行eval，
+                        // 而是在后续中调用，
+                        // 因此不能恢复代理，防止被跳过。
+                        //this[onevent] = rawFn;
+
+                        if (err) throw err;
+                        return ret;
+                    };
+                }
+
+                function hookEvent(eventName) {
+                    _document.addEventListener(eventName, handleAllEvent, true);
+                }
+
+
+                if (DEBUG ||
+                        inlineLenScanner || inlineKeyScanner) {
+                    //
+                    // 捕获所有内联事件
+                    //
+                    for(var k in _document) {
+                        if (/^on/i.test(k)) {
+                            hookEvent(k.substr(2));
+                        }
+                    }
+                }
+
+                function checkEvalBlock(exp) {
+                    if (inlineDepth > 0) {
+                        if (inlineEvalTarget & TARGET_WARN) {
+                            warnReport('INLINE_UNSAFE_EVAL', exp);
+                        }
+                        if (inlineEvalTarget & TARGET_DENY) {
+                            inlineBlocked = true;
+                            Audit.warn('拦截事件：内联执行eval');
+                            return true;
+                        }
+                    }
+                }
+
+                function myEavl(s) {
+                    if (!checkEvalBlock(s)) {
+                        return _eval(s);
+                    }
+                }
+
+                if (DEBUG ||
+                        inlineEvalTarget != TARGET_ACCEPT) {
+
+                    hookMember(_Window_prototype, 'setTimeout', function setTimeout(s) {
+                        if (typeof s == 'string' && checkEvalBlock(s)) {
+                            return;
+                        }
+                        return _Window_setTimeout.apply(this, arguments);
+                    });
+
+                    hookMember(_Window_prototype, 'setInterval', function setInterval(s) {
+                        if (typeof s == 'string' && checkEvalBlock(s)) {
+                            return;
+                        }
+                        return _Window_setInterval.apply(this, arguments);
+                    });
+                }
+            }
+
+            // 保护顶层
+            if (env == window) {
+                PolicyInline();
+            }
+
+            // 当前环境已保护
+            defHiddenProp(env, flagEnvInit, true);
+            Audit.timeEnd('初始化');
+        }
+
+    })(this);
+</script>
+
+
+</body>
+</html>

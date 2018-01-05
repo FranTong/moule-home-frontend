@@ -1,0 +1,22 @@
+
+
+# Ignore Mac OS desktop services store
+.DS_Store
+
+# Ignore Windows desktop setting file
+desktop.ini
+
+./src/.idea
+.idea/
+build/
+npm-debug.log
+webpack.config.js
+webpack.build.config.js
+#maomao 2016-05-16
+*.xml
+.idea/
+.idea/*.xml
+.idea/workspace.xml
+src/.idea/
+src/*.xml
+node_modules/

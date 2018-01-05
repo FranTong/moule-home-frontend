@@ -1,0 +1,112 @@
+.form-control {
+  height: 50px;
+  display: inline-block;
+  border-radius: 6px;
+  border: 2px solid #c5cccc;
+}
+input.form-control {
+  width: 530px;
+}
+select.form-control {
+  width: 257px;
+}
+.main {
+  margin: 60px auto;
+  width: 980px;
+}
+.top {
+  overflow: hidden;
+}
+.title {
+  font-size: 18px;
+  font-weight: bold;
+}
+.msg-box {
+  margin: 20px 0;
+}
+.send {
+  font-size: 16px;
+  color: white;
+  background: #06A0FF;
+  width: 131px;
+  height: 50px;
+  border: none;
+  border-radius: 6px;
+}
+.right-side {
+  width: 400px;
+  font-size: 16px;
+  margin-left: 49px;
+  color: #8B969F;
+}
+.right-title {
+  color: #06A0FF;
+  font-size: 18px;
+  margin: 20px 0;
+}
+.line {
+  border-bottom: 1px solid #E4E4E4;
+  margin: 50px 0;
+}
+.bottom {
+  color: #999;
+  font-size: 16px;
+}
+.bottom-box {
+  margin: 20px 0;
+}
+.bottom-title {
+  font-size: 20px;
+  font-weight: bold;
+  margin-bottom: 20px;
+  color: #333;
+}
+.bottom-content {
+  line-height: 1.5;
+  color: #8B969F;
+}
+.title {
+  font-size: 20px;
+  font-weight: bold;
+}
+.msg-box {
+  margin: 30px 0;
+}
+.get {
+  background: #999;
+  color: white;
+  border: none;
+  height: 40px;
+  border-radius: 5px;
+  width: 118px;
+  font-size: 16px;
+}
+.get:hover {
+  background: #06A0FF;
+}
+#banner {
+  height: 405px;
+  background: url("/images/site-banner-1.jpg") no-repeat;
+  background-position: center;
+  background-size: cover;
+}
+.contactUs {
+  width: 500px;
+  margin: 0 auto;
+  color: #fff;
+  padding: 166px 0 120px 0 ;
+  text-align: center;
+}
+.contactUs .item1 {
+  font-size: 46px;
+}
+.contactUs .item2 {
+  font-size: 24px;
+  width: 155px;
+  padding: 10px 0;
+  margin: 0 auto;
+}
+#message {
+  color: red;
+  margin-left: 10px;
+}

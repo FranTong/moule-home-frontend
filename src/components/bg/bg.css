@@ -1,0 +1,47 @@
+.home-service-bg {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  margin-left: -960px;
+  width: 1920px;
+  z-index: 1;
+  opacity: .7;
+  font-size: 0;
+  text-align: center;
+  -webkit-box-sizing: border-box;
+  box-sizing: border-box;
+  -webkit-animation: bgScroll 24s infinite linear;
+  animation: bgScroll 24s infinite linear;
+  will-change: transform;
+}
+.bg-group {
+  box-sizing: border-box;
+  min-height: 700px;
+  background-image: url("/images/logo-banner.jpg");
+}
+.bgWrapper {
+  position: relative;
+  overflow: hidden;
+  padding: 20px 0;
+  height: 750px;
+}
+@-webkit-keyframes bgScroll {
+  from {
+    -webkit-transform: translateY(0);
+    transform: translateY(0);
+  }
+  to {
+    -webkit-transform: translateY(-33.333%);
+    transform: translateY(-33.333%);
+  }
+}
+@keyframes bgScroll {
+  from {
+    -webkit-transform: translateY(0);
+    transform: translateY(0);
+  }
+  to {
+    -webkit-transform: translateY(-33.333%);
+    transform: translateY(-33.333%);
+  }
+}

@@ -1,0 +1,87 @@
+<div>
+    <div id="banner">
+        <div class="contactUs">
+            <div class="item1">我们的故事从这里开始</div>
+            <div class="item2">CONTACT US</div>
+        </div>
+    </div>
+    <div class="main">
+        <div>
+            <div class="title" >现在开启您的安全之旅</div>
+            <div id="xss"></div>
+            <div class="top">
+                <div class="pull-left">
+                    <div class="msg-box">
+                        <input type="text" class="form-control" placeholder="姓名 Name" id="name">
+                    </div>
+                    <div class="msg-box" style="position: relative">
+                        <input type="text" class="form-control" placeholder="手机 Phone" maxlength="11" id="phone" style="width: 361px;margin-right: 15px">
+                        <input type="text" class="form-control" placeholder="验证码 Code" id="code" style="width: 151px">
+                        <button style="position: absolute;top: 5px;right: 174px" class="get"  type="button" value="获取验证码"  id="getCode" >获取验证码</button>
+                    </div>
+                    <div class="msg-box">
+                        <input type="text" class="form-control" placeholder="公司 Company" id="company">
+                    </div>
+                    <div class="msg-box">
+                        <select class="form-control" style="margin-right: 13px" id="type" >
+                            <option  value='-1'  selected >咨询内容</option>
+                            <option value="2">高级渗透服务</option>
+                            <option value="3">安全防护服务</option>
+                            <option value="4">商务咨询</option>
+                            <option value="5">战略合作</option>
+                            <option value="0">其他</option>
+                        </select>
+                        <select class="form-control" id="channel">
+                            <option   value='-1'  selected >如何得知我们?</option>
+                            <option value="1">广告</option>
+                            <option value="2">会议/活动</option>
+                            <option value="3">搜索引擎</option>
+                            <option value="4">客户介绍</option>
+                            <option value="0">其他</option>
+                        </select>
+                    </div>
+                    <div>
+                        <button type="button" class="send" id="sendApply">发送申请</button>
+                        <span id="message"></span>
+                    </div>
+                </div>
+                <div class="pull-left right-side">
+                    <div class="right-title" style="margin-top: 30px">联系我们了解更多产品&服务</div>
+                    <div style="line-height: 1.5;margin: 15px 0;">
+                        联系我们的安全专家服务，我们会评测您遇到的安全问题，并帮助您选择合适的安全解决方案。电子邮箱：support@moule.cn
+                    </div>
+                    <div class="right-title">全国热线电话 400-600-3887</div>
+                </div>
+            </div>
+            <div class="line"></div>
+            <div class="bottom">
+                <div class="bottom-box">
+                    <div class="bottom-title" style="margin-top: 20px">全国热线电话</div>
+                    <div class="bottom-content">全国热线电话：400-600-3887</div>
+                    <div class="bottom-content">1 ) 全国热线电话将在每周一至每周五 9:00-18:00提供业务咨询服务。</div>
+                    <div class="bottom-content">2 ) 若您在使用我们服务时遇到问题，您可以直接联络您的项目顾问寻求帮助，我们专业的工程师团队将为您提供7 * 24小时不间断的技术服务。
+                    </div>
+                </div>
+                <div class="bottom-box">
+                    <div class="bottom-title">商务与市场合作</div>
+                    <div class="bottom-content">商务中心：上海市闵行区黎安路999号大虹桥国际1503室 | 邮编：201199</div>
+                    <div class="bottom-content">电子邮箱：business@moule.cn</div>
+                </div>
+                <div class="bottom-box">
+                    <div class="bottom-title">技术合作</div>
+                    <div class="bottom-content">研发中心：上海市松江区龙腾路58弄13-14座 | 邮编：201620</div>
+                    <div class="bottom-content">电子邮箱：tech@moule.cn</div>
+                </div>
+                <div class="bottom-box">
+                    <div class="bottom-title">招贤纳士</div>
+                    <div class="bottom-content">HR电话：+86-021-67628306</div>
+                    <div class="bottom-content">电子邮箱：hr@moule.cn</div>
+                    <div class="bottom-content">请将您的简历发送到HR邮箱，我们会在工作日进行查阅。</div>
+                </div>
+                <div style="height: 30px"></div>
+            </div>
+        </div>
+
+    </div>
+    <div id="footer"></div>
+</div>
