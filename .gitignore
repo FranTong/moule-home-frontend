@@ -10,8 +10,6 @@ desktop.ini
 .idea/
 build/
 npm-debug.log
-webpack.config.js
-webpack.build.config.js
 #maomao 2016-05-16
 *.xml
 .idea/
