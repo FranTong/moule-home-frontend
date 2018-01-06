@@ -22,10 +22,10 @@ var rules = [
     {
         test:/\.js$/,
         loader:'babel-loader',
-        include:path.resolve(__dirname,'app'),
+        include:path.resolve(__dirname,'src'),
         exclude:path.resolve(__dirname,'node_modules'),
         query:{
-            presets:['latest']
+            presets:['eslatest-node6','es2015']
         }
     },
     {

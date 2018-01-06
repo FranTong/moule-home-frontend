@@ -18,7 +18,7 @@ var rules = [
         include:path.resolve(__dirname,'app'),
         exclude:path.resolve(__dirname,'node_modules'),
         query:{
-            presets:['latest']
+            presets:['eslatest-node6']
         }
     },
     {
@@ -125,7 +125,7 @@ var  webpackConfig = {
         progress:true,
         port:8070,
         index:'index.html',
-        host:'192.168.10.143',
+        host:'192.168.10.125',
         proxy:{
             '/api':{
                 target:'http://192.168.10.18',
