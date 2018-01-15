@@ -8,6 +8,7 @@
 
 
     var mapModule = function(obj){
+        var seter;
         var tpl = require('./map.html');
         $(obj).prepend(tpl);
         //地图点击;
